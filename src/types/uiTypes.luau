@@ -238,6 +238,9 @@ export type Session = {
 	closeSecond: (Session) -> (),
 	destroy: (Session) -> (),
 	focus: (Session) -> (),
+	isFocused: (Session) -> boolean,
+	closeIfIdle: (Session) -> (),
+	acceptMovedSelection: (Session) -> boolean,
 }
 
 export type SessionConstructor = (ScreenGui, Config, UDim2?, UDim2?) -> Session?
@@ -332,6 +335,8 @@ export type SessionRefs = {
 	secondShadow: ImageLabel,
 
 	addChatPill: TextButton,
+	closePill: TextButton,
+	closeShadow: ImageLabel,
 	addChatIcon: ImageLabel,
 	stackShadow: ImageLabel,
 

@@ -215,6 +215,7 @@ function Suggestions.attach(Session)
         self.currentSuggestions = {}
         
 		self.selectedSuggestion = nil
+		self.selectionMoved = false
         self.suggestionsHiding = true
         
         self.suggestToken += 1
@@ -363,6 +364,7 @@ function Suggestions.attach(Session)
         local current = self.selectedSuggestion or 1
         
 		self.selectedSuggestion = ((current - 1 + delta) % count) + 1
+		self.selectionMoved = true
         self:syncSelection()
 
 		local suggList = self.refs.suggList
@@ -411,6 +413,7 @@ function Suggestions.attach(Session)
 		end
 
         self.suggestionQuery = query
+		self.selectionMoved = false
         self.currentSuggestions = table.clone(list)
         
         self.suggestionsHiding = false
@@ -486,6 +489,15 @@ function Suggestions.attach(Session)
 		end)
 
 		return true
+	end
+
+	-- the first row is always highlighted, so Enter takes a row only once the arrows chose it
+	function Session:acceptMovedSelection()
+		if not self.selectionMoved then
+			return false
+		end
+
+		return self:applySuggestion(self.currentSuggestions[self.selectedSuggestion or 1])
 	end
 
 	function Session:acceptSuggestion()

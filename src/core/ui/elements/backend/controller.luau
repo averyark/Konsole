@@ -74,11 +74,18 @@ local function bindActivation(self: Controller): ()
 			return Enum.ContextActionResult.Pass
 		end
 
-		if Imports.UserInputService:GetFocusedTextBox() and not self.open and typingKey(input.KeyCode) then
+		local session = self.session
+		local focused = session ~= nil and session:isFocused()
+
+		if Imports.UserInputService:GetFocusedTextBox() and not focused and typingKey(input.KeyCode) then
 			return Enum.ContextActionResult.Pass
 		end
 
-		self:toggle()
+		if session and not focused then
+			self:focus()
+		else
+			self:toggle()
+		end
 
 		return Enum.ContextActionResult.Sink
 	end, false, self.config.input.activationPriority, table.unpack(self.activationKeys))

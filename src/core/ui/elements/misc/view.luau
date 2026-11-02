@@ -576,6 +576,35 @@ function View.createTree(session, gui)
         TextYAlignment = Enum.TextYAlignment.Center,
     }, addChat)
 
+    refs.closeShadow = createShadow(root, "CloseShadow", config, 26, false)
+
+    local closePill = View.make("TextButton", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 29,
+
+        Size = UDim2.fromOffset(panel.addChatCollapsedWidth or pillHeight, pillHeight),
+        Position = UDim2.new(0.5, 0, 1, 0),
+        AnchorPoint = Vector2.new(0.5, 1),
+
+        BackgroundColor3 = colors.panel,
+        TextColor3 = colors.promptText,
+        TextTransparency = 1,
+        TextSize = layout.textSize + 4,
+        Font = config.font.mono,
+
+        AutoButtonColor = false,
+        Selectable = true,
+        Visible = false,
+
+        Text = "×",
+        Name = "ClosePill",
+    }, root)
+
+    refs.closePill = closePill
+
+    View.corner(closePill, UDim.new(1, 0))
+
     local second, secondCorner = createPill(secondRoot, config, "SecondPill", startWidth, 0, 29, false)
 
     refs.secondPill = second

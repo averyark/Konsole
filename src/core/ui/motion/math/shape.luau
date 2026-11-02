@@ -75,14 +75,22 @@ local function layoutMain(session, time, width, mainHeight, stackExtra, layoutSe
 	end
 end
 
+-- grows leftward from its collapsed place, so the close button beside it stays under the cursor
+local function addChatPosition(session, width)
+	local panel = session.config.panel
+	local collapsed = panel.addChatCollapsedWidth or panel.height
+
+	return UDim2.new(0.5, -(width - collapsed) / 2, 1, 0)
+end
+
 local function layoutAddChat(session, time, width, showAddChat, layoutSeq)
 	local refs = session.refs
 	local panel = session.config.panel
     local transparency = session.config.transparency
-    
+
     local openWidth = session:addChatWidth(width)
-    
-    local position = UDim2.new(0.5, 0, 1, 0)
+
+    local position = addChatPosition(session, openWidth)
 	local fadeTime = math.min(time, 0.14)
 
 	if showAddChat then
@@ -126,7 +134,7 @@ local function layoutAddChat(session, time, width, showAddChat, layoutSeq)
 			and not refs.addChatPill.Visible
 		then
             refs.addChatPill.Size = UDim2.fromOffset(panel.addChatCollapsedWidth or panel.height, panel.height)
-            refs.addChatPill.Position = position
+            refs.addChatPill.Position = UDim2.new(0.5, 0, 1, 0)
             			
             refs.addChatText.Size = UDim2.fromOffset(0, 0)
             
@@ -473,7 +481,10 @@ function Shape.hover(session)
 	local textSize = session.addChatHover and UDim2.new(1, -28, 1, 0) or UDim2.fromOffset(0, 0)
 	local time = config.motion.itemSlideSmoothTime or 0.2
 
-	Tween.to(refs.addChatPill, { Size = UDim2.fromOffset(width, config.panel.height) }, time)
+	Tween.to(refs.addChatPill, {
+		Position = addChatPosition(session, width),
+		Size = UDim2.fromOffset(width, config.panel.height),
+	}, time)
     Tween.fade(refs.addChatText, { TextTransparency = textTransparency }, time)
     Tween.to(refs.addChatText, { Size = textSize }, time)
     

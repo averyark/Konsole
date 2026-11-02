@@ -30,19 +30,6 @@ local function normalize(value: any): string
 	return string.lower(tostring(value or ""))
 end
 
-local function quoteIfNeeded(value: any): string
-	local text = tostring(value or "")
-	if text == "" then
-		return text
-	end
-
-	if string.find(text, "%s") then
-		return string.format("%q", text)
-	end
-
-	return text
-end
-
 local function notify()
 	for _, watcher in watchers do
 		task.spawn(watcher)
@@ -178,28 +165,10 @@ function Kommand.suggestions(): { string }
 		local definition = definitions[key]
 
 		if definition then
-			local nameSeen: { [string]: boolean } = {}
-			local names: { string } = {}
-
-			pushUnique(names, nameSeen, definition.name)
+			pushUnique(suggestions, seen, definition.name)
 
 			for _, alias in definition.aliases do
-				pushUnique(names, nameSeen, alias)
-			end
-
-			for _, name in names do
-				pushUnique(suggestions, seen, name)
-			end
-
-			local firstArg = definition.args[1]
-			local argSuggestions = type(firstArg) == "table" and firstArg.suggestions or nil
-
-			if type(argSuggestions) == "table" then
-				for _, name in names do
-					for _, suggestion in argSuggestions do
-						pushUnique(suggestions, seen, name .. " " .. quoteIfNeeded(suggestion))
-					end
-				end
+				pushUnique(suggestions, seen, alias)
 			end
 		end
 	end

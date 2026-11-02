@@ -438,6 +438,11 @@ function Hints.attach(Session)
 
 			track(box.FocusLost:Connect(function(enterPressed)
 				if not enterPressed then
+					self:closeIfIdle()
+					return
+				end
+
+				if self:acceptMovedSelection() then
 					return
 				end
 

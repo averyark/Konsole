@@ -196,8 +196,14 @@ local function setRecall(self, channel, input, text)
 	end)
 end
 
+local function ownsFocus(self)
+	local focused = UserInputService:GetFocusedTextBox()
+
+	return focused ~= nil and (focused:IsDescendantOf(self.refs.root) or focused:IsDescendantOf(self.refs.secondRoot))
+end
+
 local function keyInput(self, input)
-	if not self.isExpanded then
+	if not self.isExpanded or not ownsFocus(self) then
 		return false
 	end
 
@@ -244,6 +250,15 @@ local function inShell(refs, point)
 		or View.pointIn(refs.suggList, point)
 		or View.pointIn(refs.secondPill, point)
 		or View.pointIn(refs.addChatPill, point)
+		or View.pointIn(refs.closePill, point)
+end
+
+local function requestClose(self)
+	if Text.callable(self.onCloseRequest) then
+		self.onCloseRequest()
+	else
+		self:collapse()
+	end
 end
 
 local function clickInput(self)
@@ -324,7 +339,7 @@ local function bindInput(self)
 		end
 
 		if input.KeyCode == Enum.KeyCode.Escape then
-			self:collapse()
+			requestClose(self)
 			return
 		end
 
@@ -415,6 +430,44 @@ local function bindRefs(self)
 		self:expand()
 	end))
 
+	local function syncClosePill()
+		local add = refs.addChatPill
+		local width = self.config.panel.addChatCollapsedWidth or self.config.panel.height
+		local gap = self.config.panel.stackGap or 8
+
+		refs.closePill.Size = UDim2.fromOffset(width, add.Size.Y.Offset)
+		refs.closePill.Position = add.Position + UDim2.fromOffset((add.Size.X.Offset + width) / 2 + gap, 0)
+		refs.closePill.BackgroundTransparency = add.BackgroundTransparency
+		refs.closePill.TextTransparency = refs.addChatIcon.ImageTransparency
+		refs.closePill.Visible = add.Visible
+
+		refs.closeShadow.ImageTransparency = refs.stackShadow.ImageTransparency
+		refs.closeShadow.Visible = add.Visible and refs.stackShadow.Visible
+	end
+
+	for _, pair in
+		{
+			{ refs.addChatPill, { "Position", "Size", "BackgroundTransparency", "Visible" } },
+			{ refs.addChatIcon, { "ImageTransparency" } },
+			{ refs.stackShadow, { "ImageTransparency", "Visible" } },
+		}
+	do
+		for _, property in pair[2] do
+			track(pair[1]:GetPropertyChangedSignal(property):Connect(syncClosePill))
+		end
+	end
+
+	track(refs.closePill.Activated:Connect(function()
+		requestClose(self)
+	end))
+
+	-- Roblox keeps Esc for its menu when no text box has focus, so the key never reaches us
+	track(game:GetService("GuiService").MenuOpened:Connect(function()
+		if not self.isDestroying then
+			requestClose(self)
+		end
+	end))
+
 	track(refs.addChatPill.MouseEnter:Connect(function()
 		self:setAddChatHover(true)
 	end))
@@ -480,6 +533,8 @@ local function bindRefs(self)
 		track(input.FocusLost:Connect(function(enterPressed)
 			if enterPressed then
 				self:submit(channel)
+			else
+				self:closeIfIdle()
 			end
 		end))
 
@@ -492,6 +547,7 @@ local function bindRefs(self)
 			{ refs.suggShadow, refs.suggList },
 
 			{ refs.stackShadow, refs.addChatPill },
+			{ refs.closeShadow, refs.closePill },
 			{ refs.secondShadow, refs.secondPill },
 		}
 	do
@@ -586,6 +642,7 @@ local function baseState(config)
 
 		suggestionsHiding = false,
 		suggestionQuery = "",
+		selectionMoved = false,
 		suggestToken = 0,
 
 		placeholderVisible = { false, false },
@@ -859,9 +916,19 @@ function Session:submit(channel)
 		return
 	end
 
+	if self:acceptMovedSelection() then
+		return
+	end
+
 	local text = Text.trim(self:assembleCommand(channel))
 
 	if text == "" then
+		task.defer(function()
+			if input.Parent then
+				input:CaptureFocus()
+			end
+		end)
+
 		return
 	end
 
@@ -1014,9 +1081,39 @@ end
 
 function Session:focus()
 	task.defer(function()
-		if self.refs then
-			self:expand()
+		if not self.refs then
+			return
 		end
+
+		if not self.isExpanded then
+			self:expand()
+			return
+		end
+
+		local input = self:activeInput()
+
+		if input then
+			input:CaptureFocus()
+		end
+	end)
+end
+
+function Session:isFocused()
+	return self.isExpanded and ownsFocus(self)
+end
+
+function Session:closeIfIdle()
+	task.defer(function()
+		if self.isDestroying or not self.isExpanded or self.hasOutput or self.hasSecondChat then
+			return
+		end
+
+		-- a click inside the bar takes focus on the way down, before the click lands
+		if ownsFocus(self) or inShell(self.refs, UserInputService:GetMouseLocation()) then
+			return
+		end
+
+		requestClose(self)
 	end)
 end
 
