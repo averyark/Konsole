@@ -1,11 +1,11 @@
 [package]
-name = "kyrorblx/konsole"
+name = "averyark/konsole"
 description = "Konsole is a little Roblox command console"
-version = "0.1.11"
+version = "0.1.12"
 license = "MIT"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
-authors = ["KYRORBLX <dullflowerr>"]
+authors = ["KYRORBLX <dullflowerr>", "averyark"]
 
 include = [
 	"default.project.json",
