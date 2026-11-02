@@ -581,6 +581,7 @@ local function baseState(config)
 
 		suggestionConnections = {},
 		currentSuggestions = {},
+		suggestionRows = {},
 		selectedSuggestion = nil,
 
 		suggestionsHiding = false,

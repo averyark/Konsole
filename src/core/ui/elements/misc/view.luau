@@ -479,6 +479,15 @@ function View.createTree(session, gui)
 
     View.padding(suggList, 0, 2, 0, 2)
 
+    refs.suggSpacer = View.make("Frame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 0,
+
+        Size = UDim2.new(1, 0, 0, 0),
+        Name = "SuggSpacer",
+    }, suggList)
+
     refs.suggList = suggList
 
     local pill, pillCorner, pillPad = createPill(root, config, "Pill", startWidth, pillHeight, 30)

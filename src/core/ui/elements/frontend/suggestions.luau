@@ -117,6 +117,19 @@ local function placeList(session)
     refs.suggList.Parent = root
 end
 
+-- The first entry a window of `slots` rows shows when the canvas is scrolled to
+-- `canvasY`. Pure, so what is on screen follows from the list and the scroll alone.
+local function firstVisible(canvasY, rowHeight, count, slots)
+	local first = math.floor(math.max(0, canvasY) / rowHeight) + 1
+
+	return math.clamp(first, 1, math.max(1, count - slots + 1))
+end
+
+-- One row more than the panel fits, because a scrolled canvas shows part of two.
+local function windowSlots(limit, count)
+	return math.min(count, limit + 1)
+end
+
 --// public api
 local Suggestions = {}
 
@@ -184,6 +197,8 @@ function Suggestions.attach(Session)
 		end
 
 		Imports.View.clearSuggestionConnections(self)
+		self.suggestionRows = {}
+
 		if not suggList.Visible and #self.currentSuggestions == 0 then
             self.suggestionsHiding = false
             
@@ -214,29 +229,128 @@ function Suggestions.attach(Session)
 		end
 
 		local config = self.config
-		for _, child in suggList:GetChildren() do
-			if not child:IsA("TextButton") then
+		for _, row in self.suggestionRows do
+			local suggestion = self.currentSuggestions[row.index]
+			if not suggestion then
 				continue
 			end
 
-			local index = tonumber(string.match(child.Name, "^Sugg_(%d+)$")) or 0
-            local selected = self.selectedSuggestion == index
-            
-            local label = child:FindFirstChild("Label")
-            
-			if typeof(label) == "Instance" and label:IsA("TextLabel") then
-				label.Font = selected and config.font.title or config.font.body
-                local suggestion = child:GetAttribute("SuggestionText")
-                
-				if type(suggestion) == "string" then
-					local richText = Imports.View.richSuggestion(suggestion, self.suggestionQuery, config)
-					label.Text = selected and ("<b>" .. richText .. "</b>") or richText
+			local selected = self.selectedSuggestion == row.index
+			local richText = Imports.View.richSuggestion(suggestion, self.suggestionQuery, config)
+
+			row.label.Font = selected and config.font.title or config.font.body
+			row.label.Text = selected and ("<b>" .. richText .. "</b>") or richText
+
+			row.button.BackgroundTransparency = selected and 0.72 or 1
+			row.button.BackgroundColor3 = config.color.suggPanel
+		end
+	end
+
+	function Session:renderSuggestionWindow()
+		local suggList = self.refs.suggList
+		local rows = self.suggestionRows
+		local rowHeight = self.config.panel.suggestionHeight
+
+		local count = #self.currentSuggestions
+		local slots = math.min(#rows, count)
+		local first = firstVisible(suggList.CanvasPosition.Y, rowHeight, count, slots)
+
+		self.refs.suggSpacer.Size = UDim2.new(1, 0, 0, (first - 1) * rowHeight)
+
+		for slot, row in rows do
+			row.index = first + slot - 1
+			row.button.Visible = slot <= slots
+		end
+
+		self:syncSelection()
+	end
+
+	function Session:ensureSuggestionRows(slots, showing)
+		local suggList = self.refs.suggList
+		local config = self.config
+		local panel = config.panel
+		local rows = self.suggestionRows
+
+		if #rows == 0 then
+			for _, child in suggList:GetChildren() do
+				if child:IsA("TextButton") then
+					child:Destroy()
 				end
-            end
-            
-            child.BackgroundTransparency = selected and 0.72 or 1
-            child.BackgroundColor3 = config.color.suggPanel
-			
+			end
+
+			table.insert(
+				self.suggestionConnections,
+
+				suggList:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+					self:renderSuggestionWindow()
+				end)
+			)
+		end
+
+		local slide = showing and 0 or (config.motion.textSlideOffset or 10)
+
+		for slot = #rows + 1, slots do
+			local button = Imports.View.make("TextButton", {
+                LayoutOrder = slot,
+
+				Size = UDim2.new(1, 0, 0, panel.suggestionHeight),
+                BackgroundColor3 = config.color.suggPanel,
+
+                BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+                ZIndex = 32,
+
+                AutoButtonColor = false,
+
+                Name = "Sugg_" .. tostring(slot),
+                Text = "",
+            }, suggList)
+
+			Imports.View.corner(button, panel.suggestionRadius or 10)
+
+			local label = Imports.View.make("TextLabel", {
+                Name = "Label",
+
+                Position = UDim2.new(0, config.layout.paddingX, 0, 1 + slide),
+                Size = UDim2.new(1, -(config.layout.paddingX * 2), 1, -2),
+
+                TextYAlignment = Enum.TextYAlignment.Center,
+                TextXAlignment = Enum.TextXAlignment.Left,
+
+                TextSize = config.layout.suggTextSize,
+                TextColor3 = config.color.suggText,
+                Font = config.font.body,
+
+                BackgroundTransparency = 1,
+                TextTransparency = showing and config.transparency.suggText or 1,
+                ZIndex = 33,
+
+                Text = "",
+                RichText = true,
+			}, button)
+
+			local row = { button = button, label = label, index = slot }
+			rows[slot] = row
+
+			table.insert(
+                self.suggestionConnections,
+
+				button.Activated:Connect(function()
+					self:applySuggestion(self.currentSuggestions[row.index])
+				end)
+			)
+			table.insert(
+                self.suggestionConnections,
+
+				button.MouseEnter:Connect(function()
+					self.selectedSuggestion = row.index
+					self:syncSelection()
+				end)
+			)
+
+			if not showing then
+				Imports.Suggest.item(self, label)
+			end
 		end
 	end
 
@@ -303,85 +417,14 @@ function Suggestions.attach(Session)
 
         self.selectedSuggestion = 1
         self.suggestToken += 1
-        
-        Imports.View.clearSuggestionConnections(self)
+
         self:placeSuggestions()
+		self:ensureSuggestionRows(windowSlots(limit, count), showing)
 
 		suggList.CanvasPosition = Vector2.zero
 		suggList.CanvasSize = UDim2.fromOffset(0, (count * panel.suggestionHeight) + 4)
-        
-		for _, child in suggList:GetChildren() do
-			if child:IsA("TextButton") then
-				child:Destroy()
-			end
-		end
 
-		local slide = showing and 0 or (config.motion.textSlideOffset or 10)
-
-		for index = 1, count do
-			local suggestion = list[index]
-			local button = Imports.View.make("TextButton", {
-                LayoutOrder = index,
-                
-				Size = UDim2.new(1, 0, 0, panel.suggestionHeight),
-                BackgroundColor3 = config.color.suggPanel,
-                
-                BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-                ZIndex = 32,
-                
-                AutoButtonColor = false,
-                
-                Name = "Sugg_" .. tostring(index),
-                Text = "",
-            }, suggList)
-            
-			Imports.View.corner(button, panel.suggestionRadius or 10)
-			button:SetAttribute("SuggestionText", suggestion)
-
-			local label = Imports.View.make("TextLabel", {
-                Name = "Label",
-                
-                Position = UDim2.new(0, config.layout.paddingX, 0, 1 + slide),
-                Size = UDim2.new(1, -(config.layout.paddingX * 2), 1, -2),
-                
-                TextYAlignment = Enum.TextYAlignment.Center,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                
-                TextSize = config.layout.suggTextSize,
-                TextColor3 = config.color.suggText,
-                Font = config.font.body,
-                
-                BackgroundTransparency = 1,
-                TextTransparency = showing and config.transparency.suggText or 1,
-                ZIndex = 33,
-				
-                Text = Imports.View.richSuggestion(suggestion, query, config),
-                RichText = true,
-			}, button)
-
-			table.insert(
-                self.suggestionConnections,
-                
-				button.Activated:Connect(function()
-					self:applySuggestion(suggestion)
-				end)
-			)
-			table.insert(
-                self.suggestionConnections,
-                
-				button.MouseEnter:Connect(function()
-					self.selectedSuggestion = index
-					self:syncSelection()
-				end)
-			)
-
-			if not showing then
-				Imports.Suggest.item(self, label)
-			end
-		end
-
-		self:syncSelection()
+		self:renderSuggestionWindow()
         Imports.Suggest.reveal(self, visibleCount)
         
 		task.defer(function()

@@ -328,6 +328,7 @@ export type SessionRefs = {
 
 	commandRow: ScrollingFrame,
 	suggList: ScrollingFrame,
+	suggSpacer: Frame,
 	secondShadow: ImageLabel,
 
 	addChatPill: TextButton,
